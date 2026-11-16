@@ -20,7 +20,7 @@ Microsoft Entra ID
 id-cicd-azfullstack-dev-6j8oq  ──  3. short-lived Azure token
   │
   ├─ Website Contributor ──────────────► func-azfullstack-dev-6j8oq  (backend deploy)
-  └─ SWA Deployment Token Reader ──────► stapp-azfullstack-dev-6j8oq (reads deploy token)
+  └─ Contributor ─────────────────────► stapp-azfullstack-dev-6j8oq (reads deploy token)
 ```
 
 ## Workflows
@@ -98,21 +98,29 @@ gh api repos/Luviz/az-fullstack/actions/oidc/customization/sub --jq .sub_claim_p
 The prefix is set with the Terraform variable `github_oidc_subject_prefix`, and
 the environment name with `github_environment` (default `production`).
 
-### Permissions (least privilege)
+### Permissions
 
-| Role                                                       | Scope                              | Why                                                                                                                   |
-| ---------------------------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Website Contributor (built-in)                             | `func-azfullstack-dev-6j8oq` only  | Deploy code, and add or remove the temporary IP rule on the deploy endpoint                                           |
-| SWA Deployment Token Reader (custom, defined in Terraform) | `stapp-azfullstack-dev-6j8oq` only | `Microsoft.Web/staticSites/read` and `Microsoft.Web/staticSites/listSecrets/action`, needed to fetch the deploy token |
+Built-in roles only, each scoped to a single resource. There are no custom roles.
+
+| Role (built-in)     | Scope                              | Why                                                                         |
+| ------------------- | ---------------------------------- | --------------------------------------------------------------------------- |
+| Website Contributor | `func-azfullstack-dev-6j8oq` only  | Deploy code, and add or remove the temporary IP rule on the deploy endpoint |
+| Contributor         | `stapp-azfullstack-dev-6j8oq` only | Read the SWA deployment token (`listSecrets`)                               |
 
 The identity has no access at resource group or subscription level, and no
 access to storage, App Insights or anything else.
 
-**Known gap:** Website Contributor allows more than deploying inside the
-Function App (for example changing app settings, restarting or deleting the
-app). A custom role limited to the exact deploy and access-restriction actions
-would be tighter. It needs testing against a real Flex Consumption deploy before
-it replaces the built-in role.
+**Trade-off:** both roles allow more than the pipeline needs, within their one
+resource. Website Contributor can also change app settings, restart or delete the
+Function App. Contributor can also change or delete the Static Web App. The
+pipeline only needs:
+
+- Function App: `Microsoft.Web/sites/read`, `sites/config/read`,
+  `sites/config/list/action`, `sites/config/write` and `sites/publish/action`
+- Static Web App: `Microsoft.Web/staticSites/listSecrets/action`
+
+Custom roles with just these actions would be tighter, but the project uses
+built-in roles only for simplicity.
 
 ## Network access on the Function App
 
@@ -190,7 +198,7 @@ the Azure Verified Modules and don't change real infrastructure.
 | `AADSTS700213: No matching federated identity record found for presented assertion subject '…'` | The subject GitHub sent doesn't match the federated credential | Compare the subject in the error with `github_oidc_subject_prefix` and `github_environment`, update, and run `terraform apply`. Also check that the job has `environment: production` |
 | `Ip Forbidden (CODE: 403)` during the Function App deploy                                       | The deploy endpoint blocks the runner's IP                     | Check that public network access is enabled and that the "Allow runner IP" step succeeded. Leftover `gh-run-*` rules can be deleted safely                                            |
 | `Bad Request (CODE: 400)` from `Azure/functions-action` | The action hides the real error. Most likely the storage firewall blocks the package upload (`BlobUploadFailedException ... 403`) | Check that the storage account has public network access enabled. To see the real error, POST the zip to `https://<app>.scm.azurewebsites.net/api/publish?RemoteBuild=false` with an ARM bearer token from an allowed IP |
-| `AuthorizationFailed` on `az staticwebapp secrets list`                                         | The identity lacks the custom SWA role                         | Run `terraform apply` and check the `swa_deploy` role assignment                                                                                                                      |
+| `AuthorizationFailed` on `az staticwebapp secrets list`                                         | The identity lacks Contributor on the SWA                      | Run `terraform apply` and check the `swa_deploy` role assignment                                                                                                                      |
 | Login fails with a missing `id-token` permission                                                | The job lacks `permissions: id-token: write`                   | Add it to the deploy job                                                                                                                                                              |
 
 Check what's live in Azure:
