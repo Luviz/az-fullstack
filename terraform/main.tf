@@ -161,8 +161,14 @@ module "func" {
     APPLICATIONINSIGHTS_AUTHENTICATION_STRING = "ClientId=${module.func_identity.client_id};Authorization=AAD"
   }
 
+  # Public app (the SWA linked backend calls it), but the deploy endpoint (Kudu/scm)
+  # denies everyone. The backend pipeline allows its runner IP only while deploying.
+  public_network_access_enabled = true
+
   site_config = {
-    minimum_tls_version = "1.2"
+    minimum_tls_version               = "1.2"
+    scm_ip_restriction_default_action = "Deny"
+    scm_use_main_ip_restriction       = false
   }
 
   tags = local.tags
@@ -199,7 +205,7 @@ resource "azurerm_static_web_app_function_app_registration" "api" {
 
 # ---------------------------------------------------------------------------
 # CI/CD: identity GitHub Actions logs in as (OIDC, no secrets).
-# Least privilege: deploy code to the Function App only.
+# Least privilege: deploy to the Function App and read the SWA deployment token.
 # ---------------------------------------------------------------------------
 
 module "cicd_identity" {

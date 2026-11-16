@@ -72,8 +72,43 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
+      # The deploy endpoint (Kudu/scm) denies all IPs by default (see terraform/main.tf).
+      # GitHub-hosted runners have no fixed IP, so allow this runner's IP for the deploy only.
+      - name: Allow runner IP on deploy endpoint
+        env:
+          APP: ${{ vars.AZURE_FUNCTIONAPP_NAME }}
+          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+          RULE: gh-run-${{ github.run_id }}
+        run: |
+          ip=$(curl -fsS https://api.ipify.org)
+          echo "Runner IP: $ip"
+          az functionapp config access-restriction add -g "$RG" -n "$APP" \
+            --scm-site true --rule-name "$RULE" --action Allow \
+            --ip-address "$ip/32" --priority 100 -o none
+
+          # Wait until the rule is live: Kudu answers 401 (auth needed) instead of 403 (IP denied).
+          scm=$(az functionapp show -g "$RG" -n "$APP" \
+            --query "enabledHostNames[?contains(@, '.scm.')] | [0]" -o tsv)
+          for _ in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://$scm/api/settings" || true)
+            [ "$code" != "403" ] && echo "Deploy endpoint reachable ($code)" && exit 0
+            sleep 5
+          done
+          echo "::error::Deploy endpoint still returns 403 after 150s"
+          exit 1
+
       - uses: Azure/functions-action@v1
         with:
           app-name: ${{ vars.AZURE_FUNCTIONAPP_NAME }}
           package: backend.zip
           sku: flexconsumption
+
+      - name: Remove runner IP from deploy endpoint
+        if: always()
+        env:
+          APP: ${{ vars.AZURE_FUNCTIONAPP_NAME }}
+          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+          RULE: gh-run-${{ github.run_id }}
+        run: |
+          az functionapp config access-restriction remove -g "$RG" -n "$APP" \
+            --scm-site true --rule-name "$RULE" -o none || true
