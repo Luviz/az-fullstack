@@ -215,7 +215,7 @@ module "cicd_identity" {
       name     = "github-${var.github_environment}"
       issuer   = "https://token.actions.githubusercontent.com"
       audience = ["api://AzureADTokenExchange"]
-      subject  = "repo:${var.github_repository}:environment:${var.github_environment}"
+      subject  = "${var.github_oidc_subject_prefix}:environment:${var.github_environment}"
     }
   }
 

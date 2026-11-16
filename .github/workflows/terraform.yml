@@ -1,16 +1,7 @@
 name: Terraform
 
+# Manual only for now. Terraform is applied locally, not from GitHub Actions.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "terraform/**"
-      - ".github/workflows/terraform.yml"
-  pull_request:
-    branches: [main]
-    paths:
-      - "terraform/**"
-      - ".github/workflows/terraform.yml"
   workflow_dispatch:
 
 permissions:

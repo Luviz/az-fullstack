@@ -56,10 +56,14 @@ variable "tags" {
   default     = {}
 }
 
-variable "github_repository" {
-  description = "GitHub repository (owner/name) allowed to deploy via OIDC."
+variable "github_oidc_subject_prefix" {
+  description = <<-EOT
+    Subject prefix GitHub puts in its OIDC token for this repo. The repo uses the
+    immutable format (owner@owner_id/repo@repo_id). Check with:
+    gh api repos/<owner>/<repo>/actions/oidc/customization/sub --jq .sub_claim_prefix
+  EOT
   type        = string
-  default     = "Luviz/az-fullstack"
+  default     = "repo:Luviz@4950894/az-fullstack@1460072766"
 }
 
 variable "github_environment" {
