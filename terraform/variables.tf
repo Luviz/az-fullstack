@@ -55,3 +55,15 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "github_repository" {
+  description = "GitHub repository (owner/name) allowed to deploy via OIDC."
+  type        = string
+  default     = "Luviz/az-fullstack"
+}
+
+variable "github_environment" {
+  description = "GitHub Actions environment the deploy jobs run in."
+  type        = string
+  default     = "production"
+}

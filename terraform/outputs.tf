@@ -23,3 +23,8 @@ output "function_app_name" {
 output "function_app_url" {
   value = "https://${module.func.resource_uri}"
 }
+
+output "cicd_client_id" {
+  description = "Client ID for azure/login in GitHub Actions."
+  value       = module.cicd_identity.client_id
+}

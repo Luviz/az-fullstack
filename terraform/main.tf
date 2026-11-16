@@ -196,3 +196,35 @@ resource "azurerm_static_web_app_function_app_registration" "api" {
   static_web_app_id = module.web.resource_id
   function_app_id   = module.func.resource_id
 }
+
+# ---------------------------------------------------------------------------
+# CI/CD: identity GitHub Actions logs in as (OIDC, no secrets).
+# Least privilege: deploy code to the Function App only.
+# ---------------------------------------------------------------------------
+
+module "cicd_identity" {
+  source  = "Azure/avm-res-managedidentity-userassignedidentity/azurerm"
+  version = "0.6.0"
+
+  name                = "id-cicd-${local.name}-${local.suffix}"
+  location            = var.location
+  resource_group_name = module.resource_group.name
+
+  federated_identity_credentials = {
+    github = {
+      name     = "github-${var.github_environment}"
+      issuer   = "https://token.actions.githubusercontent.com"
+      audience = ["api://AzureADTokenExchange"]
+      subject  = "repo:${var.github_repository}:environment:${var.github_environment}"
+    }
+  }
+
+  outbound_role_assignments = {
+    func_deploy = {
+      role_definition_id_or_name = "Website Contributor"
+      scope                      = module.func.resource_id
+    }
+  }
+
+  tags = local.tags
+}
