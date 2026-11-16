@@ -1,0 +1,86 @@
+name: Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Hardcoded for now. TODO: move to GitHub Actions variables.
+env:
+  AZURE_CLIENT_ID: "b80cd80f-e2a4-4cf5-bac0-015c29a51808" # id-cicd-azfullstack-dev-6j8oq
+  AZURE_TENANT_ID: "8a704dd9-896d-4f97-bca1-1b8720c76951"
+  AZURE_SUBSCRIPTION_ID: "37c9effe-ba3f-4b42-aaa7-afdcfeafa9b2"
+  AZURE_FUNCTIONAPP_NAME: "func-azfullstack-dev-6j8oq"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Test & package
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+      - run: npm test
+
+      # Ship production dependencies only (drops azure-functions-core-tools etc.).
+      - name: Prune dev dependencies
+        run: npm prune --omit=dev
+
+      - name: Package
+        run: zip -r ../backend.zip . -x '.git*' '.vscode/*' 'local.settings.json' 'test/*' '*.ts' '*.js.map'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-package
+          path: backend.zip
+          retention-days: 7
+
+  deploy:
+    name: Deploy → Function App
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write # OIDC to Azure
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-package
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - uses: Azure/functions-action@v1
+        with:
+          app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
+          package: backend.zip
+          sku: flexconsumption
