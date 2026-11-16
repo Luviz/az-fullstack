@@ -87,11 +87,16 @@ jobs:
             --ip-address "$ip/32" --priority 100 -o none
 
           # Wait until the rule is live: Kudu answers 401 (auth needed) instead of 403 (IP denied).
-          scm=$(az functionapp show -g "$RG" -n "$APP" \
-            --query "enabledHostNames[?contains(@, '.scm.')] | [0]" -o tsv)
+          scm=$(az resource show --ids "$(az functionapp show -g "$RG" -n "$APP" --query id -o tsv)" \
+            --query "properties.hostNameSslStates[?hostType=='Repository'].name | [0]" -o tsv)
+          echo "Deploy endpoint: $scm"
           for _ in $(seq 1 30); do
             code=$(curl -s -o /dev/null -w '%{http_code}' "https://$scm/api/settings" || true)
-            [ "$code" != "403" ] && echo "Deploy endpoint reachable ($code)" && exit 0
+            # 000 = no connection, 403 = IP still blocked. Anything else means the rule is live.
+            if [ "$code" != "403" ] && [ "$code" != "000" ]; then
+              echo "Deploy endpoint reachable ($code)"
+              exit 0
+            fi
             sleep 5
           done
           echo "::error::Deploy endpoint still returns 403 after 150s"

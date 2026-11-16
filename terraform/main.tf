@@ -67,8 +67,11 @@ module "storage" {
   min_tls_version          = "TLS1_2"
   # Keys stay disabled (module default); the function app uses managed identity.
   shared_access_key_enabled = false
-  # Flex Consumption without VNet integration reaches storage over the public endpoint.
-  network_rules = null
+  # Flex Consumption without VNet integration reaches storage over the public endpoint
+  # (host storage + deployment package). The module defaults this to false, which blocks
+  # both. Access still requires Entra ID + RBAC since shared keys are disabled.
+  public_network_access_enabled = true
+  network_rules                 = null
 
   containers = {
     deployments = {
