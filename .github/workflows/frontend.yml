@@ -16,14 +16,6 @@ on:
 permissions:
   contents: read
 
-# Hardcoded for now. TODO: move to GitHub Actions variables.
-env:
-  AZURE_CLIENT_ID: "b80cd80f-e2a4-4cf5-bac0-015c29a51808" # id-cicd-azfullstack-dev-6j8oq
-  AZURE_TENANT_ID: "8a704dd9-896d-4f97-bca1-1b8720c76951"
-  AZURE_SUBSCRIPTION_ID: "37c9effe-ba3f-4b42-aaa7-afdcfeafa9b2"
-  AZURE_RESOURCE_GROUP: "rg-azfullstack-dev"
-  AZURE_STATIC_WEB_APP_NAME: "stapp-azfullstack-dev-6j8oq"
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -71,13 +63,16 @@ jobs:
 
       - uses: azure/login@v2
         with:
-          client-id: ${{ env.AZURE_CLIENT_ID }}
-          tenant-id: ${{ env.AZURE_TENANT_ID }}
-          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       # Fetch the deployment token with the managed identity; it is never stored in GitHub.
       - name: Get SWA deployment token
         id: swa
+        env:
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_STATIC_WEB_APP_NAME: ${{ vars.AZURE_STATIC_WEB_APP_NAME }}
         run: |
           token=$(az staticwebapp secrets list \
             --name "$AZURE_STATIC_WEB_APP_NAME" \
