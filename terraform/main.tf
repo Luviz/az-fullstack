@@ -224,7 +224,29 @@ module "cicd_identity" {
       role_definition_id_or_name = "Website Contributor"
       scope                      = module.func.resource_id
     }
+    swa_deploy = {
+      role_definition_id_or_name = azurerm_role_definition.swa_deploy.role_definition_resource_id
+      scope                      = module.web.resource_id
+    }
   }
 
   tags = local.tags
+}
+
+# The SWA deploy action only accepts a deployment token. Instead of storing it in
+# GitHub, the pipeline logs in as the CI/CD identity and reads the token at runtime.
+# No built-in role is that narrow, so this custom role allows only that.
+resource "azurerm_role_definition" "swa_deploy" {
+  name        = "SWA Deployment Token Reader (${local.name}-${local.suffix})"
+  scope       = module.resource_group.resource_id
+  description = "Read a Static Web App and list its deployment token."
+
+  permissions {
+    actions = [
+      "Microsoft.Web/staticSites/read",
+      "Microsoft.Web/staticSites/listSecrets/action",
+    ]
+  }
+
+  assignable_scopes = [module.resource_group.resource_id]
 }
